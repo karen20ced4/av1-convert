@@ -28,7 +28,7 @@ function Write-BuildLog {
 
 # === Pregătire mediu ===
 try {
-    Write-BuildLog "=== Început proces build AV1 Converter v$($buildConfig.Version) ==="
+    Write-BuildLog "=== Inceput proces build AV1 Converter v$($buildConfig.Version) ==="
     
     # Verifică PS2EXE
     if (-not (Get-Module -ListAvailable -Name ps2exe)) {
@@ -61,18 +61,18 @@ try {
     foreach ($file in $sourceFiles) {
         if (Test-Path $file) {
             $content = Get-Content $file -Raw -Encoding UTF8
-            $combinedContent += "`n# === Început $file ===`n"
+            $combinedContent += "`n# === Inceput $file ===`n"
             $combinedContent += $content
-            $combinedContent += "`n# === Sfârșit $file ===`n"
+            $combinedContent += "`n# === Sfarsit $file ===`n"
             Write-BuildLog "Procesat: $file"
         }
         else {
-            throw "Fișierul $file nu există!"
+            throw "Fisierul $file nu există!"
         }
     }
 
     $combinedContent | Out-File $combinedPath -Encoding UTF8
-    Write-BuildLog "Fișierele au fost combinate în: $combinedPath"
+    Write-BuildLog "Fisierele au fost combinate in: $combinedPath"
 
     # Creare README
     $readmePath = Join-Path $buildConfig.BuildDir "README.txt"
@@ -80,9 +80,9 @@ try {
 AV1 Converter v$($buildConfig.Version)
 Build generat la: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 
-Fișiere incluse:
+Fisiere incluse:
 - $($buildConfig.OutputName)
-- combined.ps1 (cod sursă combinat)
+- combined.ps1 (cod sursa combinat)
 "@
     $readmeContent | Out-File $readmePath -Encoding UTF8
     Write-BuildLog "README generat: $readmePath"
@@ -107,7 +107,7 @@ Fișiere incluse:
 
     # Verifică rezultatul
     if (Test-Path $outputPath) {
-        Write-BuildLog "Executabil creat cu succes în: $outputPath" "SUCCESS"
+        Write-BuildLog "Executabil creat cu succes in: $outputPath" "SUCCESS"
     }
     else {
         throw "Executabilul nu a fost creat!"
@@ -115,7 +115,7 @@ Fișiere incluse:
 
     # Curățare fișier temporar
     Remove-Item $combinedPath -Force
-    Write-BuildLog "Fișier combinat eliminat: $combinedPath"
+    Write-BuildLog "Fisier combinat eliminat: $combinedPath"
 
     Write-BuildLog "=== Build finalizat cu succes! ===" "SUCCESS"
 }
