@@ -1,11 +1,11 @@
-# Version v6.7 
+# Version v6.8 
 # AV1 Converter - Fixed heartbeat, accurate final display
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $form = New-Object Windows.Forms.Form
-$form.Text = "Av1 Converter - v6.7"
+$form.Text = "Av1 Converter - v6.8"
 $form.Size = '800,730'
 $form.MinimumSize = '800,730'
 $form.StartPosition = "CenterScreen"
@@ -14,7 +14,11 @@ $form.AllowDrop = $true
 $fontMain = New-Object System.Drawing.Font("Segoe UI", 12.5, [System.Drawing.FontStyle]::Regular)
 $fontBold = New-Object System.Drawing.Font("Segoe UI", 12.5, [System.Drawing.FontStyle]::Bold)
 
-$configPath = Join-Path $PSScriptRoot "config.ini"
+$configPath = if ($MyInvocation.MyCommand.Path) {
+    Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "config.ini"
+} else {
+    Join-Path $PWD.Path "config.ini"
+}
 $config = @{}
 
 # === Variabile globale pentru heartbeat și control conversie ===
@@ -26,27 +30,43 @@ $global:hibernateCancelled = $false
 
 # === Funcție pentru citire config.ini ===
 function Load-Config {
-    if (Test-Path $configPath) {
-        $lines = Get-Content $configPath
-        foreach ($line in $lines) {
-            if ($line -match "^\s*(\w+)\s*=\s*(.+?)\s*$") {
-                $config[$matches[1]] = $matches[2]
+    try {
+        if (Test-Path $configPath) {
+            $lines = Get-Content $configPath -ErrorAction Stop
+            foreach ($line in $lines) {
+                if ($line -match "^\s*(\w+)\s*=\s*(.+?)\s*$") {
+                    $config[$matches[1]] = $matches[2]
+                }
             }
         }
+    } catch {
+        Write-LogMessage "[WARNING] Nu s-a putut încărca config.ini: $($_.Exception.Message)" "Yellow"
     }
 }
 
 # === Funcție pentru salvare config.ini ===
 function Save-Config {
-    $content = @(
-        "CRF=$($textBoxCRF.Text)"
-        "FFmpegPath=$($textBoxFFmpeg.Text)"
-        "InputFolder=$($textBoxInput.Text)"
-        "OutputFolder=$($textBoxOutput.Text)"
-        "ParallelJobs=$($comboParallel.SelectedItem)"
-        "DeleteOriginal=$($checkDeleteOriginal.Checked)"
-    )
-    $content | Set-Content $configPath
+    try {
+        $content = @(
+            "CRF=$($textBoxCRF.Text)"
+            "FFmpegPath=$($textBoxFFmpeg.Text)"
+            "InputFolder=$($textBoxInput.Text)"
+            "OutputFolder=$($textBoxOutput.Text)"
+            "ParallelJobs=$($comboParallel.SelectedItem)"
+            "DeleteOriginal=$($checkDeleteOriginal.Checked)"
+        )
+        
+        # Asigură-te că directorul există
+        $configDir = Split-Path -Parent $configPath
+        if (-not (Test-Path $configDir)) {
+            New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+        }
+        
+        $content | Set-Content $configPath -ErrorAction Stop
+        Write-LogMessage "[INFO] Configurație salvată în $configPath" "Green"
+    } catch {
+        Write-LogMessage "[ERROR] Nu s-a putut salva config.ini: $($_.Exception.Message)" "Red"
+    }
 }
 
 # === Funcție pentru log thread-safe ===
@@ -102,6 +122,22 @@ function Format-Duration($ts) {
         return "$($ts.Seconds) sec"
     }
 }
+
+
+
+# Verificare la pornirea aplicației
+if (-not (Test-Path $configPath)) {
+    try {
+        $null = New-Item -ItemType File -Path $configPath -Force
+        Write-LogMessage "[INFO] Creat fișier nou config.ini în $configPath" "Green"
+    } catch {
+        Write-LogMessage "[WARNING] Nu s-a putut crea config.ini: $($_.Exception.Message)" "Yellow"
+        $configPath = Join-Path $PWD.Path "config.ini"
+        Write-LogMessage "[INFO] Se va folosi calea alternativă: $configPath" "Yellow"
+    }
+}
+
+
 
 Load-Config
 
@@ -530,49 +566,56 @@ $buttonStart.Add_Click({
                 $newFileName = $file.BaseName + "-av1" + $file.Extension
                 $destPath = Join-Path $outputDirFull $newFileName
 
+
+
+
+
                 # Start job conversion
-                $job = Start-ThreadJob -ScriptBlock {
+				$job = Start-ThreadJob -ScriptBlock {
 					param($ffmpegPath, $filePath, $destPath, $crf, $showOutput)
-					
+
 					try {
 						$arguments = "-y -i `"$filePath`" -c:v libsvtav1 -crf $crf `"$destPath`""
-						
+
+						# Configurare proces fără fereastră
+						$psi = New-Object System.Diagnostics.ProcessStartInfo
+						$psi.FileName = $ffmpegPath
+						$psi.Arguments = $arguments
+						$psi.UseShellExecute = $false
+						$psi.CreateNoWindow = $true
+						$psi.WindowStyle = 'Hidden'
+
 						if ($showOutput) {
-							# Configurare proces cu redirectare
-							$psi = New-Object System.Diagnostics.ProcessStartInfo
-							$psi.FileName = $ffmpegPath
-							$psi.Arguments = $arguments
-							$psi.UseShellExecute = $false
+							# Capturăm output-ul și îl afișăm în aplicație
 							$psi.RedirectStandardError = $true
 							$psi.RedirectStandardOutput = $true
-							$psi.CreateNoWindow = $true
-							
+
 							$process = New-Object System.Diagnostics.Process
 							$process.StartInfo = $psi
 							$outputBuilder = New-Object System.Collections.ArrayList
-							
-							# Event handlers pentru output în timp real
+
 							$stdOutEvent = Register-ObjectEvent -InputObject $process -EventName 'OutputDataReceived' -Action {
-								if (![string]::IsNullOrEmpty($Event.SourceEventArgs.Data)) {
-									$outputBuilder.Add($Event.SourceEventArgs.Data)
+								if (-not [string]::IsNullOrEmpty($EventArgs.Data)) {
+									$outputBuilder.Add($EventArgs.Data)
+									Write-Host "FFMPEG_OUTPUT: $($EventArgs.Data)"
 								}
 							}
-							
+
 							$stdErrEvent = Register-ObjectEvent -InputObject $process -EventName 'ErrorDataReceived' -Action {
-								if (![string]::IsNullOrEmpty($Event.SourceEventArgs.Data)) {
-									$outputBuilder.Add($Event.SourceEventArgs.Data)
+								if (-not [string]::IsNullOrEmpty($EventArgs.Data)) {
+									$outputBuilder.Add($EventArgs.Data)
+									Write-Host "FFMPEG_OUTPUT: $($EventArgs.Data)"
 								}
 							}
-							
+
 							$process.Start() | Out-Null
 							$process.BeginOutputReadLine()
 							$process.BeginErrorReadLine()
 							$process.WaitForExit()
-							
-							# Curățare evenimente
+
 							Unregister-Event -SourceIdentifier $stdOutEvent.Name
 							Unregister-Event -SourceIdentifier $stdErrEvent.Name
-							
+
 							return @{
 								ExitCode = $process.ExitCode
 								FileName = (Split-Path $filePath -Leaf)
@@ -581,8 +624,15 @@ $buttonStart.Add_Click({
 								FFmpegOutput = $outputBuilder.ToArray()
 							}
 						} else {
-							# Rulare normală fără captură output
-							$process = Start-Process -FilePath $ffmpegPath -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+							# Nu capturăm output-ul, dar tot ascundem fereastra
+							$psi.RedirectStandardError = $false
+							$psi.RedirectStandardOutput = $false
+
+							$process = New-Object System.Diagnostics.Process
+							$process.StartInfo = $psi
+							$process.Start() | Out-Null
+							$process.WaitForExit()
+
 							return @{
 								ExitCode = $process.ExitCode
 								FileName = (Split-Path $filePath -Leaf)
@@ -599,6 +649,18 @@ $buttonStart.Add_Click({
 						}
 					}
 				} -ArgumentList $ffmpegPath, $file.FullName, $destPath, ([int]$textBoxCRF.Text), $checkFFmpegOutput.Checked
+
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
+				
 
 
                 $jobs += $job
