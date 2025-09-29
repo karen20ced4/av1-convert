@@ -1,4 +1,4 @@
-# Version v6.5 
+# Version v6.6 
 # AV1 Converter - Fixed heartbeat, accurate final display
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -112,7 +112,7 @@ Load-Config
 # === Clear Log Button ===
 $buttonClearLog = New-Object Windows.Forms.Button
 $buttonClearLog.Text = "Clear Log"
-$buttonClearLog.Location = '670,220'  # Poziționat lângă eticheta "Conversion Log"
+$buttonClearLog.Location = '680,220'  # Poziționat lângă eticheta "Conversion Log"
 $buttonClearLog.Size = '90,30'
 $buttonClearLog.Font = $fontMain
 $buttonClearLog.Add_Click({
@@ -124,7 +124,7 @@ $form.Controls.Add($buttonClearLog)
 # === FFmpeg Output Checkbox ===
 $checkFFmpegOutput = New-Object Windows.Forms.CheckBox
 $checkFFmpegOutput.Text = "Show FFmpeg log"
-$checkFFmpegOutput.Location = '480,220'  # Poziționat deasupra log-ului
+$checkFFmpegOutput.Location = '280,220'  # Poziționat deasupra log-ului
 $checkFFmpegOutput.Size = '220,30'
 $checkFFmpegOutput.Font = $fontMain
 $form.Controls.Add($checkFFmpegOutput)
@@ -370,7 +370,7 @@ $pulseActive = [char]0x2588  # █
 $pulseIdle   = [char]0x2591  # ░
 
 $heartbeatTimer = New-Object Windows.Forms.Timer
-$heartbeatTimer.Interval = 500  # FIX: Redus de la 1000ms la 500ms pentru răspuns mai rapid
+$heartbeatTimer.Interval = 250  # FIX: Redus de la 1000ms la 250ms pentru răspuns mai rapid
 
 $heartbeatTimer.Add_Tick({
     if (-not $global:conversionActive) {
