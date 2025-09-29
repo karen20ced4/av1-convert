@@ -1,5 +1,4 @@
 # Version v6.5 
-# inca nu merge cancelable hibernate
 # AV1 Converter - Fixed heartbeat, accurate final display
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -531,7 +530,7 @@ $buttonStart.Add_Click({
                 $newFileName = $file.BaseName + "-av1" + $file.Extension
                 $destPath = Join-Path $outputDirFull $newFileName
 
-                # Start job
+                # Start job conversion
                 $job = Start-ThreadJob -ScriptBlock {
 					param($ffmpegPath, $filePath, $destPath, $crf, $showOutput)
 					
@@ -539,22 +538,57 @@ $buttonStart.Add_Click({
 						$arguments = "-y -i `"$filePath`" -c:v libsvtav1 -crf $crf `"$destPath`""
 						
 						if ($showOutput) {
-							# Captăm output-ul FFmpeg
-							$process = Start-Process -FilePath $ffmpegPath -ArgumentList $arguments -NoNewWindow -Wait -PassThru -RedirectStandardOutput "temp_out.txt" -RedirectStandardError "temp_err.txt"
-							$ffmpegOutput = Get-Content "temp_out.txt", "temp_err.txt" -ErrorAction SilentlyContinue
-							Remove-Item "temp_out.txt", "temp_err.txt" -ErrorAction SilentlyContinue
+							# Configurare proces cu redirectare
+							$psi = New-Object System.Diagnostics.ProcessStartInfo
+							$psi.FileName = $ffmpegPath
+							$psi.Arguments = $arguments
+							$psi.UseShellExecute = $false
+							$psi.RedirectStandardError = $true
+							$psi.RedirectStandardOutput = $true
+							$psi.CreateNoWindow = $true
+							
+							$process = New-Object System.Diagnostics.Process
+							$process.StartInfo = $psi
+							$outputBuilder = New-Object System.Collections.ArrayList
+							
+							# Event handlers pentru output în timp real
+							$stdOutEvent = Register-ObjectEvent -InputObject $process -EventName 'OutputDataReceived' -Action {
+								if (![string]::IsNullOrEmpty($Event.SourceEventArgs.Data)) {
+									$outputBuilder.Add($Event.SourceEventArgs.Data)
+								}
+							}
+							
+							$stdErrEvent = Register-ObjectEvent -InputObject $process -EventName 'ErrorDataReceived' -Action {
+								if (![string]::IsNullOrEmpty($Event.SourceEventArgs.Data)) {
+									$outputBuilder.Add($Event.SourceEventArgs.Data)
+								}
+							}
+							
+							$process.Start() | Out-Null
+							$process.BeginOutputReadLine()
+							$process.BeginErrorReadLine()
+							$process.WaitForExit()
+							
+							# Curățare evenimente
+							Unregister-Event -SourceIdentifier $stdOutEvent.Name
+							Unregister-Event -SourceIdentifier $stdErrEvent.Name
+							
+							return @{
+								ExitCode = $process.ExitCode
+								FileName = (Split-Path $filePath -Leaf)
+								FilePath = $filePath
+								DestPath = $destPath
+								FFmpegOutput = $outputBuilder.ToArray()
+							}
 						} else {
-							# Rulăm fără a captura output-ul
+							# Rulare normală fără captură output
 							$process = Start-Process -FilePath $ffmpegPath -ArgumentList $arguments -NoNewWindow -Wait -PassThru
-							$ffmpegOutput = $null
-						}
-						
-						return @{ 
-							ExitCode = $process.ExitCode
-							FileName = (Split-Path $filePath -Leaf)
-							FilePath = $filePath
-							DestPath = $destPath
-							FFmpegOutput = $ffmpegOutput
+							return @{
+								ExitCode = $process.ExitCode
+								FileName = (Split-Path $filePath -Leaf)
+								FilePath = $filePath
+								DestPath = $destPath
+							}
 						}
 					} catch {
 						return @{
