@@ -1,11 +1,11 @@
-# Version v6.6 
+# Version v6.7 
 # AV1 Converter - Fixed heartbeat, accurate final display
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $form = New-Object Windows.Forms.Form
-$form.Text = "Av1 Converter - v6.5"
+$form.Text = "Av1 Converter - v6.7"
 $form.Size = '800,730'
 $form.MinimumSize = '800,730'
 $form.StartPosition = "CenterScreen"
