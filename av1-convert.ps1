@@ -533,7 +533,7 @@ $buttonStart.Add_Click({
             
             # Verifică Start-ThreadJob
             if (-not (Get-Command Start-ThreadJob -ErrorAction SilentlyContinue)) {
-                Write-LogMessage "ERROR: Start-ThreadJob is not available. Please install the ThreadJob module." "Red"
+                Write-LogMessage "ERROR: Start-ThreadJob is not available. Please install: `n #>>> Install-Module -Name ThreadJob -Scope CurrentUser -Force" "Red"
                 throw "ThreadJob module not available"
             }
             
@@ -854,3 +854,4 @@ $form.Add_FormClosed({
 
 # === Show Form ===
 $form.ShowDialog()
+
